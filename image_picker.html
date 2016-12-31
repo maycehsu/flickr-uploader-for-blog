@@ -1,0 +1,103 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Image Picker</title>
+  <link rel="stylesheet" type="text/css" href="image-picker/image-picker.css">
+  <script src="jquery-3.1.1.min.js" type="text/javascript"></script>
+  <script src="image-picker/image-picker.js" type="text/javascript"></script>
+  <script src="thumbnail_list.json" type="text/javascript"></script>
+  <script type='text/javascript'>
+  //alert(data.photos)
+  /*
+  for(var i=0;i<data.photos.length;i++){
+	  //alert(data.photos[i])
+  	$('#myselect').append($("<option></option>").attr("data-img-src", data.photos[i]).text(i))
+  } */
+  function frmLoad(){
+  //alert('select len'+$('#myselect > option').length)
+  $.each(data.photos, function (i, item) {
+      $('#myselect').append($('<option>', { 
+          value: item,
+          text : i,
+		  "data-img-src": item
+      }));
+  });
+ 
+   //alert('select len'+$('#myselect > option').length)
+  
+  jQuery("select.image-picker").imagepicker({
+    hide_select:  false,
+  });
+
+  jQuery("select.image-picker.show-labels").imagepicker({
+    hide_select:  false,
+    show_label:   true,
+  });
+
+  
+  }
+  
+  function copy(){
+	  //alert('copy'+ $('#myselect').val())
+	  var url_list=$('#myselect').val()
+	  makeMarkdown(url_list)
+	 
+  	
+  }
+  
+  function selectPhoto(){
+	  //alert('selectPhoto')
+	  var url_list=$('#myselect').val()
+	  makeMarkdown(url_list)
+  }
+  
+  function makeMarkdown(url_list){
+	 var output=""
+	 
+	 for(var i=0;i<url_list.length;i++){
+		 var line="!["+i+"]("+url_list[i]+")"
+		 output=output+line+"\n"
+	 	  //console.log(url_list[i])
+	 }
+	 console.log(output)
+	 clipboard.value = output
+	 clipboard.select();
+	 try {
+	     var successful = document.execCommand('copy');
+	     var msg = successful ? 'successful' : 'unsuccessful';
+	     console.log('Copying text command was ' + msg);
+	   } catch (err) {
+	     console.log('Oops, unable to copy');
+	   }
+  	
+  }
+  
+  $(document).ready(function(){
+  	frmLoad()
+  });
+  </script>
+</head>
+<body>
+  <form>
+  <div id="container">
+    <h3>Selects Multiple</h3>
+    <p class='highlight'>
+      Image Picker works great on select multiple elements too.
+    </p>
+    <div class="picker">
+      <select multiple="multiple" class="image-picker" id="myselect" onchange="selectPhoto();">
+      </select>
+	  <textarea name="clipboard"  id="clipboard"></textarea>
+    </div>
+
+
+    
+
+  </div>
+
+  </form>
+
+</body>
+</html>

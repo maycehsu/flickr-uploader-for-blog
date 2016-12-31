@@ -71,6 +71,7 @@ import subprocess
 import re
 import ConfigParser
 from multiprocessing.pool import ThreadPool
+from datetime import datetime, date, timedelta
 
 if sys.version_info < (2, 7):
     sys.stderr.write("This script requires Python 2.7 or newer.\n")
@@ -102,7 +103,7 @@ CONVERT_RAW_FILES = eval(config.get('Config', 'CONVERT_RAW_FILES'))
 FULL_SET_NAME = eval(config.get('Config', 'FULL_SET_NAME'))
 SOCKET_TIMEOUT = eval(config.get('Config', 'SOCKET_TIMEOUT'))
 MAX_UPLOAD_ATTEMPTS = eval(config.get('Config', 'MAX_UPLOAD_ATTEMPTS'))
-
+THUMBNAIL_URL_OUT_FILE = eval(config.get('Config', 'THUMBNAIL_URL_OUT_FILE'))
 
 class APIConstants:
     """ APIConstants class
@@ -977,7 +978,99 @@ class Uploadr:
             allsets = cur.fetchall()
             for row in allsets:
                 print("Set: " + str(row[0]) + "(" + row[1] + ")")
-
+    @staticmethod
+    def timestamp(dt):
+        return int((dt - datetime(1970, 1, 1)).total_seconds())
+    def getFlickrPhotosByDate(self, fromdate, todate):
+        #print 'fromdate',fromdate, 'todate',todate
+        from_dt=datetime.combine(fromdate, datetime.min.time())
+        to_dt = datetime.combine(todate, datetime.min.time())
+        #print 'from_dt=', from_dt
+        #print 'to_dt=',to_dt
+        fromts=self.timestamp(from_dt)
+        tots=self.timestamp(to_dt)
+        d={'min_upload_date':str(fromts), 'max_upload_date':str(tots)}
+        #d={'min_upload_date':fromdate.strftime('%Y%m%d'), 'max_upload_date':todate.strftime('%Y%m%d')}
+        return self.getFlickrPhotosBy(d)
+    def getPhotoURL(self, photo, size='m'):
+        url='https://farm{farm_id}.staticflickr.com/{server_id}/{id}_{secret}_{size}.jpg'.format(farm_id=photo['farm'], \
+        server_id=photo['server'], id=photo['id'], secret=photo['secret'], size=size)
+        return url
+    def getFlickrPhotosBy(self, search_data):
+        photos=[]
+        print('*****recent upload photos****')
+        try:
+            d = {
+                "auth_token": str(self.token),
+                #"perms": str(self.perms),
+                "format": "json",
+                "nojsoncallback": "1",
+                "user_id": "maycehsu",
+                "method": "flickr.photos.search"
+            }
+            d.update(search_data)
+            print 'd=',d
+            url = self.urlGen(api.rest, d, self.signCall(d))
+            res = self.getResponse(url)
+            if (self.isGood(res)):
+                #cur = con.cursor()
+                #print '**result returned'
+                #print res
+                for row in res['photos']['photo']:
+                    #print row.keys()
+                    #photoId = row['id']
+                    #photoTitle = row['title']
+                    #isPublic = row['ispublic']
+                    #lastUpdate = row['lastupdate']
+                    line=u""
+                    for key in row.keys():
+                        line=line+' '+key+':'+unicode(row[key])
+                    print line
+                    photos.append(row)
+                    print self.getPhotoURL(row)
+                    #print(u"Photos #{0} ({1}) public:{2}".format(photoId, photoTitle, isPublic))
+                
+                return photos    
+            else:
+                print(d)
+                self.reportError(res)
+        except:
+            print(str(sys.exc_info()))
+            
+    def getFlickrRecentUploads(self, min_date):
+        print('*****recent upload photos****')
+        try:
+            d = {
+                "auth_token": str(self.token),
+                "perms": str(self.perms),
+                "min_date": min_date,
+                "format": "json",
+                "nojsoncallback": "1",
+                "method": "flickr.photos.recentlyUpdated"
+            }
+            url = self.urlGen(api.rest, d, self.signCall(d))
+            res = self.getResponse(url)
+            if (self.isGood(res)):
+                #cur = con.cursor()
+                
+                for row in res['photos']['photo']:
+                    #print row.keys()
+                    #photoId = row['id']
+                    #photoTitle = row['title']
+                    #isPublic = row['ispublic']
+                    #lastUpdate = row['lastupdate']
+                    line=u""
+                    for key in row.keys():
+                        line=line+' '+key+':'+unicode(row[key])
+                    print line
+                    #print(u"Photos #{0} ({1}) public:{2}".format(photoId, photoTitle, isPublic))
+                    
+            else:
+                print(d)
+                self.reportError(res)
+        except:
+            print(str(sys.exc_info()))
+            
     # Get sets from Flickr
     def getFlickrSets(self):
         print('*****Adding Flickr Sets to DB*****')
@@ -1145,6 +1238,12 @@ if __name__ == "__main__":
                         help='Number of photos to upload simultaneously')
     parser.add_argument('-n', '--dry-run', action='store_true',
                         help='Dry run')
+    parser.add_argument('-R', '--recent', action='store',
+                        help='recent date')
+    parser.add_argument('-q', '--search-days', action='store',
+                        help='search recent days')
+    parser.add_argument('-g', '--search-date-range', action='store',
+                        help='search date range')
     args = parser.parse_args() 
     print args.dry_run
 
@@ -1158,22 +1257,59 @@ if __name__ == "__main__":
         print("Please enter an API key and secret in the script file (see README).")
         sys.exit()
 
-    flick.setupDB()
+    #flick.setupDB()
 
-    if args.daemon:
-        flick.run()
+    
+    if not flick.checkToken():
+        print '***authenticate'
+        flick.authenticate()
+    # flick.displaySets()
+
+    #flick.removeUselessSetsTable()
+    
+    if args.search_days:
+        print '**search recent days', args.search_days
+        days=int(args.search_days)
+        nowdate=datetime.now().date()
+        fromdate=datetime.now().date()-timedelta(days=days)
+        todate=nowdate
+        
+    elif args.search_date_range:
+        print '**search date range, ex 20160101-20160330 or 20161011: ', args.search_date_range
+        if '-' in args.search_date_range:
+            
+            
+            try:
+                dates=args.search_date_range.split('-')
+                fromdate=datetime.strptime(dates[0], '%Y%m%d')
+                todate=datetime.strptime(dates[1], '%Y%m%d')
+            except ValueError,e:
+                print("Error: %s" % e.args[0])
+                print 'fail to convert date', args.search_date_range
+                sys.exit()
+            
+        else:
+            fromdate=fromdate=datetime.strptime(args.search_date_range, '%Y%m%d')
+            todate=fromdate
+    if fromdate and todate:
+        print 'fromdate',fromdate, 'todate',todate
+        photos=flick.getFlickrPhotosByDate(fromdate, todate)
+        if photos:
+            with open(THUMBNAIL_URL_OUT_FILE, 'w') as outfile:
+            
+                urls=[]
+                for photo in photos:
+                    urls.append(flick.getPhotoURL(photo))
+                data={'photos':urls}
+                outfile.write('data=')
+                json.dump(data,outfile)
+                print 'write file', THUMBNAIL_URL_OUT_FILE, 'done'
+                webbrowser.open('file://' + os.path.realpath("image_picker.html"))
+        else:
+            print 'No photos returned'
     else:
-        if not flick.checkToken():
-            flick.authenticate()
-        # flick.displaySets()
-
-        flick.removeUselessSetsTable()
-        flick.getFlickrSets()
-        flick.convertRawFiles()
-        flick.upload()
-        flick.removeDeletedMedia()
-        flick.createSets()
-        flick.print_stat()
+        print 'Error! invalid argument'
+        
 
 
 print("--------- End time: " + time.strftime("%c") + " ---------")
