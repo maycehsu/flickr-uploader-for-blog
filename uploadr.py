@@ -104,7 +104,7 @@ FULL_SET_NAME = eval(config.get('Config', 'FULL_SET_NAME'))
 SOCKET_TIMEOUT = eval(config.get('Config', 'SOCKET_TIMEOUT'))
 MAX_UPLOAD_ATTEMPTS = eval(config.get('Config', 'MAX_UPLOAD_ATTEMPTS'))
 THUMBNAIL_URL_OUT_FILE = eval(config.get('Config', 'THUMBNAIL_URL_OUT_FILE'))
-
+IMAGE_PICKER_HTML_PATH=eval(config.get('Config', 'IMAGE_PICKER_HTML_PATH'))
 class APIConstants:
     """ APIConstants class
     """
@@ -989,8 +989,8 @@ class Uploadr:
         #print 'to_dt=',to_dt
         fromts=self.timestamp(from_dt)
         tots=self.timestamp(to_dt)
-        d={'min_upload_date':str(fromts), 'max_upload_date':str(tots)}
-        #d={'min_upload_date':fromdate.strftime('%Y%m%d'), 'max_upload_date':todate.strftime('%Y%m%d')}
+        #d={'min_upload_date':str(fromts), 'max_upload_date':str(tots)}
+        d={'min_upload_date':fromdate.strftime('%Y-%m-%d %H:%M:%S'), 'max_upload_date':todate.strftime('%Y-%m-%d %H:%M:%S')}
         return self.getFlickrPhotosBy(d)
     def getPhotoURL(self, photo, size='m'):
         url='https://farm{farm_id}.staticflickr.com/{server_id}/{id}_{secret}_{size}.jpg'.format(farm_id=photo['farm'], \
@@ -1005,7 +1005,7 @@ class Uploadr:
                 #"perms": str(self.perms),
                 "format": "json",
                 "nojsoncallback": "1",
-                "user_id": "maycehsu",
+                "user_id": "me",
                 "method": "flickr.photos.search"
             }
             d.update(search_data)
@@ -1244,9 +1244,15 @@ if __name__ == "__main__":
                         help='search recent days')
     parser.add_argument('-g', '--search-date-range', action='store',
                         help='search date range')
+    parser.add_argument('-f', '--upload-dir', action='store',
+                        help='upload diretocry')
     args = parser.parse_args() 
     print args.dry_run
-
+    
+    if args.upload_dir:
+        FILES_DIR=args.upload_dir
+        DB_PATH = os.path.join(FILES_DIR, "flickrdb")
+        
     flick = Uploadr()
 
     if FILES_DIR == "":
@@ -1257,15 +1263,24 @@ if __name__ == "__main__":
         print("Please enter an API key and secret in the script file (see README).")
         sys.exit()
 
-    #flick.setupDB()
-
+    if args.upload_dir:
+        
+        print 'DB path', DB_PATH
+        flick.setupDB()
+        
     
+    print '***checkToken'
     if not flick.checkToken():
         print '***authenticate'
         flick.authenticate()
     # flick.displaySets()
-
+    
+    if args.upload_dir:
+        flick.upload()
+        flick.createSets()
     #flick.removeUselessSetsTable()
+    fromdate=None
+    todate=None
     
     if args.search_days:
         print '**search recent days', args.search_days
@@ -1304,12 +1319,11 @@ if __name__ == "__main__":
                 outfile.write('data=')
                 json.dump(data,outfile)
                 print 'write file', THUMBNAIL_URL_OUT_FILE, 'done'
-                webbrowser.open('file://' + os.path.realpath("image_picker.html"))
+                print 'open file', IMAGE_PICKER_HTML_PATH
+                webbrowser.open('file://' + IMAGE_PICKER_HTML_PATH)
         else:
             print 'No photos returned'
-    else:
-        print 'Error! invalid argument'
-        
+    
 
 
 print("--------- End time: " + time.strftime("%c") + " ---------")
